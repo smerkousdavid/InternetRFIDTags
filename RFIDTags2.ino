@@ -10,7 +10,7 @@
  * SPI MISO    MISO       D12 
  * SPI SCK     SCK        D13  
  */
-
+                                           ///////REMEMBER THE RGB LEDS ARE GROUNDING SO LOW MEANS ON HIGH MEANS OFF
 
 #include <UIPEthernet.h>
 
