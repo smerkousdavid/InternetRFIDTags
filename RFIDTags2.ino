@@ -11,6 +11,7 @@
  * SPI SCK     SCK        D13  
  */
 
+// THE FIRST LIBRARY THAT NEEDS TO BE INSTALLED IS UIP ETHERNET SECOND IS MFRC522 BOTH ARE ON GITHUB
 
 #include <UIPEthernet.h>
 
@@ -18,7 +19,7 @@
 #include <MFRC522.h> //The RFID key library
 
 #define RST_PIN         9           // Configurable, see typical pin layout above - This is for the Arduino Nano - For RFID
-#define SS_PIN          8
+#define SS_PIN          8 //WE ARE USING 8 FOR RFID BECAUSE THE ETHERNET MODULE USES 10
 
   byte sector         = 0;
   byte blockAddr      = 0; ////////Access certain sector/blocks in the card, trailer block is the last block
@@ -28,35 +29,43 @@ int red = 3;
 int blue = 4; //Pins for RGB LED
 int green = 5;
 
-EthernetClient client;
+EthernetClient client;  //ETHERNET INSTANCE
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 
 MFRC522::MIFARE_Key key; //Set key instance
 
-signed long timeout;
+signed long timeout; //TIMEOUT SO IT DOESN'T SIT THERE FOREVER
 
 void setup()
 {
+  //UI BEGIN
    pinMode(red, OUTPUT);
-   pinMode(blue, OUTPUT);
+   pinMode(blue, OUTPUT); //Init the RGB LED
    pinMode(green, OUTPUT);
-   digitalWrite(green, HIGH);
+   Reset(); //Start with leds off
+
   Serial.begin(9600); //Start computer connection with a rate of 9600 bits per second
+  //UI END
+
+  //ETHERNET MODULE INITIAL
   SPI.begin();        // Init SPI bus
-  uint8_t mac[6] = {0x00,0x01,0x02,0x03,0x04,0x05};
-  IPAddress mip(192,168,1,160);
-  IPAddress mdns(8,8,8,8);
-  IPAddress mgate(192,168,1,5);
-  IPAddress msubnet(255,255,255,0);
-  Ethernet.begin(mac, mip, mdns, mgate , msubnet);
+  uint8_t mac[6] = {0x00,0x01,0x02,0x03,0x04,0x05};     //MAC = 000102030405
+  IPAddress mip(192,168,1,160);                         //IP = 192.168.1.160
+  IPAddress mdns(8,8,8,8);                              //DNS = 8.8.8.8
+  IPAddress mgate(192,168,1,5);                         //GATEWAY = 192.168.1.5
+  IPAddress msubnet(255,255,255,0);                     //SUBNET = 255.255.255.0
+  Ethernet.begin(mac, mip, mdns, mgate , msubnet);      //CONNECT USING ABOVE
   Serial.println("Succesful connection");
-  delay(400);
+  // END OF ETHERNET
+  
   for(int t = 255; t > 0; t--)
   {
-    analogWrite(red, t);
+    analogWrite(red, t);           ////More of show but let at least a second between the SPI of the ethernet and RFID
     delay(10);
   }
+
+  //RFID INITIAL
   mfrc522.PCD_Init(); // Init MFRC522 card
   
      for (byte i = 0; i < 6; i++) {   // Prepare the key (used both as key A and as key B)
@@ -67,8 +76,9 @@ void setup()
     dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);     //Get key byte size
    timeout = 0;  
    delay(2000);
-   Reset();// More of show, but also just incase let the RFID and ETHERNET modules boot up before a key command and it crashing
+   Reset();
 }
+//END RFID INITIAL
 
 void loop() //Run forever
 {
@@ -83,16 +93,15 @@ void loop() //Run forever
     if ( ! mfrc522.PICC_ReadCardSerial())
         return;
 
-        digitalWrite(blue, HIGH);
-    // Show some details of the PICC (that is: the tag/card)
-    //Serial.print(F("PICC type: "));
+        digitalWrite(blue, HIGH); //Show user that card has been read
+
+
     byte piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
 
-    // Check for compatibility
+    // Check for compatibility with Mifare card
     if (    piccType != MFRC522::PICC_TYPE_MIFARE_MINI
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_1K
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
-        //Serial.println(F("This only works with 320B cards 1k cards or 4k cards Classic cards."));
         Error();
         return;
     }
@@ -122,7 +131,8 @@ void loop() //Run forever
     mfrc522.PICC_HaltA();
     // Stop encryption on PCD
     mfrc522.PCD_StopCrypto1();
-// Send to server
+    
+// AFTER DONE READING CARD SEND TO SERVER
       if (client.connect(IPAddress(192,168,1,100),23))
         {
           timeout = millis()+1000;
@@ -160,12 +170,12 @@ close:
     Serial.println("Couldn't connect to Server");
          Error();
         }
-   Reset();
+        //END OF SENDING TO SERVER
+        
+   Reset(); //RESTART LOOP WITH NO LEDS ON
 }
 
-/**
- * Helper routine to dump a byte array as hex values to Serial.
- */
+// TURN THE BUFFER ARRAY INTO A SINGLE STRING THAT IS UPPERCASE WHICH EQUALS OUR ID OF THE SECTOR AND BLOCK
 String dump_byte_array(byte *buffer, byte bufferSize) {
           String out = "";
     for (byte i = 0; i < bufferSize; i++) {
@@ -177,7 +187,9 @@ String dump_byte_array(byte *buffer, byte bufferSize) {
     out.replace(" ", "");
     return out;
 }
+//END DUMP_BYTE_ARRAY
 
+//BELOW ARE THE LED METHODS
 void Error()
 {
   digitalWrite(red, LOW);
@@ -198,3 +210,4 @@ void Reset()
    digitalWrite(blue, HIGH);
    digitalWrite(green, HIGH);
 }
+//END OF FILE
