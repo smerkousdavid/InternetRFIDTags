@@ -22,7 +22,6 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
         //DO NOTHING just send to arduino bad data
         }
         """
-        # just send back the same data, but upper-cased
         self.request.sendall("g")
 
 if __name__ == "__main__":
