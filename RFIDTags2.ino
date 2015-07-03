@@ -10,7 +10,7 @@
  * SPI MISO    MISO       D12 
  * SPI SCK     SCK        D13  
  */
-                                           ///////REMEMBER THE RGB LEDS ARE GROUNDING SO LOW MEANS ON HIGH MEANS OFF
+
 
 #include <UIPEthernet.h>
 
@@ -41,20 +41,22 @@ void setup()
    pinMode(red, OUTPUT);
    pinMode(blue, OUTPUT);
    pinMode(green, OUTPUT);
-   digitalWrite(red, HIGH);
-   digitalWrite(blue, HIGH);
    digitalWrite(green, HIGH);
   Serial.begin(9600); //Start computer connection with a rate of 9600 bits per second
-  while(!Serial); //Wait until computer is connected
   SPI.begin();        // Init SPI bus
   uint8_t mac[6] = {0x00,0x01,0x02,0x03,0x04,0x05};
-  IPAddress mip(10,0,0,150);
+  IPAddress mip(192,168,1,160);
   IPAddress mdns(8,8,8,8);
-  IPAddress mgate(10,0,0,1);
+  IPAddress mgate(192,168,1,5);
   IPAddress msubnet(255,255,255,0);
   Ethernet.begin(mac, mip, mdns, mgate , msubnet);
-  delay(20);
   Serial.println("Succesful connection");
+  delay(400);
+  for(int t = 255; t > 0; t--)
+  {
+    analogWrite(red, t);
+    delay(10);
+  }
   mfrc522.PCD_Init(); // Init MFRC522 card
   
      for (byte i = 0; i < 6; i++) {   // Prepare the key (used both as key A and as key B)
@@ -63,26 +65,9 @@ void setup()
     
     Serial.println(F("Scan a Card"));
     dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);     //Get key byte size
-   timeout = 0;
-   digitalWrite(red, LOW);
-   digitalWrite(blue, LOW);
-   delay(1000);
-   digitalWrite(red, HIGH);
-   digitalWrite(blue, HIGH);
-   delay(1000);
-   digitalWrite(red, LOW);
-   digitalWrite(blue, LOW);
-   delay(1000);
-   digitalWrite(red, HIGH);
-   digitalWrite(blue, HIGH);     // More of show, but also just incase let the RFID and ETHERNET modules boot up before a key command and it crashing
-   delay(1000);
-   digitalWrite(red, LOW);
-   digitalWrite(blue, LOW);
-   digitalWrite(green, LOW);
+   timeout = 0;  
    delay(2000);
-   digitalWrite(red, HIGH);
-   digitalWrite(blue, HIGH);
-   digitalWrite(green, HIGH);
+   Reset();// More of show, but also just incase let the RFID and ETHERNET modules boot up before a key command and it crashing
 }
 
 void loop() //Run forever
@@ -108,9 +93,7 @@ void loop() //Run forever
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_1K
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
         //Serial.println(F("This only works with 320B cards 1k cards or 4k cards Classic cards."));
-        digitalWrite(red, LOW);
-        delay(700);
-        digitalWrite(red, HIGH);
+        Error();
         return;
     }
     
@@ -123,9 +106,7 @@ void loop() //Run forever
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("PCD_Authenticate() failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
-    digitalWrite(red, LOW);
-    delay(700);
-    digitalWrite(red, HIGH);
+    Error();
     return;
   }
 
@@ -135,17 +116,14 @@ void loop() //Run forever
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("MIFARE_Read() failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
-    digitalWrite(red, LOW);
-    delay(700);
-    digitalWrite(red, HIGH);
-    return;
+    Error();
   }
       // Halt PICC 
     mfrc522.PICC_HaltA();
     // Stop encryption on PCD
     mfrc522.PCD_StopCrypto1();
 // Send to server
-      if (client.connect(IPAddress(10,0,0,98),23))
+      if (client.connect(IPAddress(192,168,1,100),23))
         {
           timeout = millis()+1000;
           Serial.println("Client connected");
@@ -166,15 +144,11 @@ void loop() //Run forever
               Serial.write(msg,size);
               if(size == sizeof("g") - 1)
               {
-                    digitalWrite(green, LOW);
-                    delay(700);
-                    digitalWrite(green, HIGH);
+                    Pass();
               }
               else
               {
-                    digitalWrite(red, LOW);
-                    delay(700);
-                    digitalWrite(red, HIGH);
+                    Error();
               }
               free(msg);
             }
@@ -184,15 +158,9 @@ close:
         else
         {
     Serial.println("Couldn't connect to Server");
-         digitalWrite(red, LOW);
-         digitalWrite(green, LOW);
-        delay(700);
-        digitalWrite(red, HIGH);
-        digitalWrite(green, HIGH);
+         Error();
         }
-   digitalWrite(red, HIGH);
-   digitalWrite(blue, HIGH);
-   digitalWrite(green, HIGH);
+   Reset();
 }
 
 /**
@@ -208,4 +176,25 @@ String dump_byte_array(byte *buffer, byte bufferSize) {
     out.toUpperCase();
     out.replace(" ", "");
     return out;
+}
+
+void Error()
+{
+  digitalWrite(red, LOW);
+  delay(700);
+  digitalWrite(red, HIGH);
+}
+
+void Pass()
+{
+  digitalWrite(green, LOW);
+  delay(700);
+  digitalWrite(green, HIGH);
+}
+
+void Reset()
+{
+   digitalWrite(red, HIGH);
+   digitalWrite(blue, HIGH);
+   digitalWrite(green, HIGH);
 }
