@@ -13,7 +13,7 @@
 
 // THE FIRST LIBRARY THAT NEEDS TO BE INSTALLED IS UIP ETHERNET SECOND IS MFRC522 BOTH ARE ON GITHUB
 
-#include <UIPEthernet.h>
+#include <UIPEthernet.h> //Only needed for the cheaper ENC2j28 ethernet module
 
 #include <SPI.h> //For the selection of the key
 #include <MFRC522.h> //The RFID key library
@@ -53,7 +53,7 @@ void setup()
   uint8_t mac[6] = {0x00,0x01,0x02,0x03,0x04,0x05};     //MAC = 000102030405
   IPAddress mip(192,168,1,160);                         //IP = 192.168.1.160
   IPAddress mdns(8,8,8,8);                              //DNS = 8.8.8.8
-  IPAddress mgate(192,168,1,5);                         //GATEWAY = 192.168.1.5
+  IPAddress mgate(192,168,1,1);                         //GATEWAY = 192.168.1.1 (Default for most routers)
   IPAddress msubnet(255,255,255,0);                     //SUBNET = 255.255.255.0
   Ethernet.begin(mac, mip, mdns, mgate , msubnet);      //CONNECT USING ABOVE
   Serial.println("Succesful connection");
@@ -68,15 +68,15 @@ void setup()
   //RFID INITIAL
   mfrc522.PCD_Init(); // Init MFRC522 card
   
-     for (byte i = 0; i < 6; i++) {   // Prepare the key (used both as key A and as key B)
+     for (byte i = 0; i < 6; i++) {   // Prepare the key which is 6 of 0xFF
         key.keyByte[i] = 0xFF;        // using FFFFFFFFFFFFh which is the default at chip delivery from the factory
         }
     
     Serial.println(F("Scan a Card"));
-    dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);     //Get key byte size
+    dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);     //Get key byte size Usually (6)
    timeout = 0;  
-   delay(2000);
-   Reset();
+   delay(1000); //Wait for module bootup(They should already be done but just to be safe)
+   Reset(); //Turn all lights off
 }
 //END RFID INITIAL
 
@@ -102,40 +102,40 @@ void loop() //Run forever
     if (    piccType != MFRC522::PICC_TYPE_MIFARE_MINI
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_1K
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
-        Error();
-        return;
+        Error(); //Error light
+        return; //Don't run anything below
     }
     
   byte status;
-  byte buffer[18];
+  byte buffer[18]; //Buffer amount of 18 bytes, which is a about a half a block worth
   byte size = sizeof(buffer);
 
 
   status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, &key, &(mfrc522.uid));
   if (status != MFRC522::STATUS_OK) {
-    Serial.print(F("PCD_Authenticate() failed: "));
+    Serial.print(F("PCD_Authenticate() failed: ")); //Remember the FFFFF... You need to identify the card before accessing
     Serial.println(mfrc522.GetStatusCodeName(status));
-    Error();
+    Error(); //Error light
     return;
   }
 
   
   // Read data from the block
-  status = mfrc522.MIFARE_Read(blockAddr, buffer, &size);
+  status = mfrc522.MIFARE_Read(blockAddr, buffer, &size); //Read the addr with a buffer 2 times (18bytes)
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("MIFARE_Read() failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
     Error();
   }
       // Halt PICC 
-    mfrc522.PICC_HaltA();
+    mfrc522.PICC_HaltA();//Stop the SPI comm with the card so you can free the line to the ethernet controller
     // Stop encryption on PCD
     mfrc522.PCD_StopCrypto1();
     
 // AFTER DONE READING CARD SEND TO SERVER
-      if (client.connect(IPAddress(192,168,1,100),23))
+      if (client.connect(IPAddress(192,168,1,100),23)) //port <1000 is priveleged, MAKE SURE FIREWALL IS OFF
         {
-          timeout = millis()+1000;
+          timeout = millis()+1000; //Get current time (since boot) and add 1000ms for a 1 second timeout
           Serial.println("Client connected");
           const String ID = dump_byte_array(buffer, size);
           client.println(ID);
@@ -143,32 +143,32 @@ void loop() //Run forever
           delay(10);
           while(client.available()==0)
             {
-              if (timeout - millis() < 0)
+              if (timeout - millis() < 0) //If greater than one second just leave
                 goto close;
             }
           int size;
-          while((size = client.available()) > 0)
+          while((size = client.available()) > 0) //if pass earlier test have a 30 second timeout
             {
               uint8_t* msg = (uint8_t*)malloc(size);
-              size = client.read(msg,size);
+              size = client.read(msg,size); //Read the memorry allocated msg, with the allocation to (size = client)
               Serial.write(msg,size);
               if(size == sizeof("g") - 1)
               {
-                    Pass();
+                    Pass(); //Finally you pass every test and get a response from the computer
               }
               else
               {
-                    Error();
+                    Error(); //Dang the card number didn't match any in the SQL server
               }
-              free(msg);
+              free(msg);//Clear the allocated memory
             }
 close:
-          client.stop();
+          client.stop(); //Close the TCP socket
         }
         else
         {
-    Serial.println("Couldn't connect to Server");
-         Error();
+    Serial.println("Couldn't connect to Server"); //If passed the 30 second timeout just show you coudn't connect to server
+         ConnectionError(); //Flash repediatly to show there was an error connecting to the TCP server
         }
         //END OF SENDING TO SERVER
         
@@ -183,9 +183,9 @@ String dump_byte_array(byte *buffer, byte bufferSize) {
         //Serial.print(buffer[i], HEX);
         out += String(buffer[i] < 0x10 ? " 0" : " ") + String(buffer[i], HEX);
     }
-    out.toUpperCase();
-    out.replace(" ", "");
-    return out;
+    out.toUpperCase(); //Make all cards uppercase, because the buffered reading will make them lower case
+    out.replace(" ", ""); //No spaces so cards don't get wacky length
+    return out; //Return the dump_byte_array String which is the ID of the card
 }
 //END DUMP_BYTE_ARRAY
 
@@ -209,5 +209,19 @@ void Reset()
    digitalWrite(red, HIGH);
    digitalWrite(blue, HIGH);
    digitalWrite(green, HIGH);
+}
+
+void ConnectionError()
+{
+  digitalWrite(red, LOW);
+  delay(400);
+  digitalWrite(red, HIGH);
+  delay(400);
+  digitalWrite(red, LOW);
+  delay(400);
+  digitalWrite(red, HIGH);
+  delay(400);
+  digitalWrite(red, LOW);
+}
 }
 //END OF FILE
