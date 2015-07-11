@@ -1,6 +1,8 @@
 # InternetRFIDTags
 Made for the academy high school management system 
 
+Want to give suggestions? Go on ahead and contact us and/or use email smerkousdavid@gmail.com
+
 ##Before we Begin
 Before we can start scanning cards and sending them to our Telnet/TCP server we need some libraries 
 Get UIPEthernet here https://github.com/ntruchsess/arduino_uip
