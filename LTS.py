@@ -1,60 +1,87 @@
 import sqlite3
+import MySQLdb
 import time
+import config
+
+from sys import exit
+
+
+class MyDB(object):
+    _conn = None
+    _cur = None
+
+    def __init__(self):
+        self._conn = MySQLdb.connect(host=config.host,
+                           user=config.user,
+                           passwd=config.passwd,
+                           db=config.db)
+        self._cur = self._conn.cursor()
+
+    def query(self, query, params=None):
+        if params != None:
+            return self._cur.execute(query, params)
+        else:
+            return self._cur.execute(query)
+    def __del__(self):
+        self._conn.close()
+
+
+
 
 def wipearray():
-    conn = sqlite3.connect('test.db')
+    DB = MyDB()
 
-    c = conn.cursor()
-    c.execute("DROP TABLE IF EXISTS learners")
+    DB.query("DROP TABLE IF EXISTS learners")
 
-    c.execute('''CREATE TABLE learners
-              (id INTEGER PRIMARY KEY AUTOINCREMENT ,
-              fName TEXT,
-              lName TEXT,
-              year TEXT,
-              notes TEXT,
-              location INTEGER,
-              checkInTime TEXT,
-              rfID TEXT)''')
-
-    conn.commit()
-    conn.close()
+    DB.query('''CREATE TABLE learners(
+                `learner_id` INT NOT NULL AUTO_INCREMENT,
+                `first_name` VARCHAR(45) NOT NULL,
+                `last_name` VARCHAR(45) NOT NULL,
+                `year` INT NOT NULL,
+                `notes` VARCHAR(255) NULL,
+                `location` INT(3) NOT NULL,
+                `check_in_time` INT(11) NOT NULL,
+                `rfid` VARCHAR(36) NOT NULL,
+                PRIMARY KEY (`learner_id`))''')
 
 
-### I did this because in the bottom class, creating a learner requires inserting fname and such else. In order to insert
+### I did this because in the bottom class, creating a learner requires inserting first_name and such else. In order to insert
 ### a name or whatever, you need an ID to insert it to. In order to get an ID, you need a name. Hence the issue
 ### Was there a better way of doing it? No doubt.
 ### Are there way more pressing issues? No doubt.
-def createLearner(fName,lName,year=0):
-    conn = sqlite3.connect('test.db')
-    c = conn.cursor()
+def createLearner(first_name,last_name):
+    """Creates a learner and returns the ID of that learner
+    :param first_name: First name (string)
+    :param last_name: Last name (string)
+    :return: ID of learner just created (long)
+    """
+    DB = MyDB()
 
-    c.execute("INSERT INTO learners (fName,lName,year,location,checkInTime) VALUES (:FirstName, :LastName, :year, 0, 0)",
-              {"FirstName": fName, "LastName": lName, 'year': year})
+    DB.query("INSERT INTO learners (first_name,last_name,year,location,check_in_time,rfid) VALUES (%s, %s, 0, 0, 0, 0)",
+             (first_name,last_name))
 
-    c.execute("""SELECT last_insert_rowid()""")
+    id = DB.query("""SELECT LAST_INSERT_ID()""")
 
-    id = c.fetchone()
-
-    conn.commit()
-    conn.close()
-
-    return id[0]
+    return id
 
 def learnerfromRFID(RFID):
-    """ Returns an LTS object from rfID """
-    conn = sqlite3.connect('test.db')
-    c = conn.cursor()
+    """ Creates a learner object
+    :param RFID: RFID of learner (string)
+    :return: Learner object (LTSBacked)
+    """
+    DB = MyDB()
     try:
-        c.execute("SELECT id FROM learners WHERE rfID = :rfID", {'rfID': RFID})
-        id = c.fetchone()[0]
+        id = DB.query("SELECT id FROM learners WHERE rfID = :rfID", {'rfID': RFID})
     except TypeError:
         raise ValueError('No learner with RFID:{}'.format(RFID))
+    try:
+        learner = LTSBackend(id)
+        return learner
+    except:
+        # TODO : Add error/event logging for serious events like this
+        print "Something went terribly, terribly wrong"
+        exit()
 
-    conn.commit()
-    conn.close()
-
-    return LTSBackend(id)
 
 ### WTF PYTHON? Why do I need to put this stupid object parameter in order for setters to work?
 class LTSBackend(object):
@@ -63,171 +90,101 @@ class LTSBackend(object):
         # Grr this is a weird way of doing it
         # Basically the "Nones" are just telling python to execute the properties
         self.ID = ID
-        self._fName = None
-        self._lName = None
+        self._first_name = None
+        self._last_name = None
         self._Location = None
         self._RFID = None
-        self.Notes = None
+        self._Notes = None
 
     @property
-    def fName(self):
-        # TODO : Not be such a lazy bum and create something that will handle opening and closing of sqlite3 db
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
-        c.execute("SELECT fName FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
+    def first_name(self):
+        DB = MyDB()
+        # TODO : Implement some form of checking before returning ID
+        return DB.query("SELECT first_name FROM learners WHERE id = %d", (self.ID))
 
-        conn.commit()
-        conn.close()
+    @first_name.setter
+    def first_name(self,newName):
+        DB = MyDB()
 
-        return final[0]
-
-    @fName.setter
-    def fName(self,newName):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
-
-        c.execute("""UPDATE learners
-                  SET fName = :newName
-                  WHERE id= :id""",
-                  {'id': self.ID, 'newName': newName})
+        DB.query("""UPDATE learners
+                  SET first_name = %s
+                  WHERE id= %d""",
+                 (newName,self.ID))
 
         # The reason I do the select is to make sure that it actually inserted it into the database
         # I should probably remove these to save speed.
-        c.execute("SELECT fName FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
-
-        conn.commit()
-        conn.close()
-
-        self._fName = final[0]
+        self._first_name = DB.query("SELECT first_name FROM learners WHERE id = %d", (self.ID))
 
     @property
-    def lName(self):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+    def last_name(self):
+        DB = MyDB()
 
-        c.execute("SELECT lName FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
+        return DB.query("SELECT last_name FROM learners WHERE id = %d", (self.ID))
 
-        conn.commit()
-        conn.close()
+    @last_name.setter
+    def last_name(self,newName):
+        DB = MyDB()
 
-        return final[0]
-
-    @lName.setter
-    def lName(self,newName):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
-
-        c.execute("""UPDATE learners
-                  SET lName = :newName
-                  WHERE id= :Identity""",
-                  {'Identity': self.ID, 'newName': newName})
-        c.execute("SELECT lName FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
-
-        conn.commit()
-        conn.close()
-
-        self._lName = final[0]
+        DB.query("""UPDATE learners
+                SET last_name = %s
+                WHERE id = %d""",
+                 (newName,self.ID))
+        self._last_name = DB.query("SELECT last_name FROM learners WHERE id = %d", (self.ID))
 
     @property
     def Notes(self):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+        DB = MyDB()
 
-        c.execute("SELECT notes FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
-
-        conn.commit()
-        conn.close()
-
-        return final[0]
+        return DB.query("SELECT notes FROM learners WHERE id = %d", (self.ID))
 
     @Notes.setter
     def Notes(self,newNotes):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+        DB = MyDB()
 
-        c.execute("""UPDATE learners
-                  SET notes = :newNotes
-                  WHERE id= :Identity""",
-                  {'Identity': self.ID, 'newNotes': newNotes})
-        c.execute("SELECT notes FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
+        DB.query("""UPDATE learners
+                  SET notes = %s
+                  WHERE id= %d""",
+                 (newNotes, self.ID))
 
-        conn.commit()
-        conn.close()
-
-        self._lName = final[0]
+        self._Notes = DB.query("SELECT notes FROM learners WHERE id = %d", (self.ID))
 
     @property
     def Location(self):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+        DB = MyDB()
 
-        c.execute('SELECT location FROM learners WHERE id= :Identity',
-                    {'Identity': self.ID})
-        final = c.fetchone()
-
-        conn.commit()
-        conn.close()
-
-        return final[0]
+        return DB.query('SELECT location FROM learners WHERE id= %d', (self.ID))
 
     @Location.setter
     def Location(self, location):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+        DB = MyDB()
 
         # This writes in the time that the check in happens
 
-        epochTime = time.time()
-        c.execute("""UPDATE learners
-                  SET checkInTime = :newtime
-                  WHERE id= :Identity""",
-                  {'Identity': self.ID, 'newtime': epochTime})
-        c.execute("""UPDATE learners
-                  SET location = :newlocation
-                  WHERE id= :Identity""",
-                  {'Identity': self.ID, 'newlocation': location})
-        c.execute("SELECT location FROM learners WHERE id = :ID", {'ID': self.ID})
-        final = c.fetchone()
+        unix_time = time.time()
+        DB.query("""UPDATE learners
+                  SET check_in_time = %d
+                  WHERE id= %d""",
+                 (unix_time, self.ID))
+        DB.query("""UPDATE learners
+                  SET location = %d
+                  WHERE id= %d""",
+                 (location, self.ID))
 
-        conn.commit()
-        conn.close()
-
-        self._Location = final[0]
+        self._Location = DB.query('SELECT location FROM learners WHERE id= %d', (self.ID))
 
     @property
     def RFID(self):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+        DB = MyDB()
 
-        c.execute('SELECT rfID FROM NFC WHERE id= :Identity',
-                    {'Identity': self.ID})
-        final = c.fetchone()
-
-        conn.commit()
-        conn.close()
-
-        return final[0]
+        return DB.query('SELECT rfid FROM learners WHERE id= %d', (self.ID))
 
     @RFID.setter
     def RFID(self,newRFID):
-        conn = sqlite3.connect('test.db')
-        c = conn.cursor()
+        DB = MyDB()
 
-        c.execute("""UPDATE learners
-              SET rfID = :RFID
-              WHERE id= :Identity""",
-          {'Identity': self.ID, 'RFID': newRFID})
+        DB.query("""UPDATE learners
+                SET rfID = %s
+                WHERE id= %d""",
+                 (newRFID,self.ID))
 
-        c.execute('SELECT rfID FROM learners WHERE id= :Identity',
-            {'Identity': self.ID})
-        final = c.fetchone()
-
-        conn.commit()
-        conn.close()
-        self._RFID = final[0]
+        return DB.query('SELECT rfid FROM learners WHERE id= %d', (self.ID))
