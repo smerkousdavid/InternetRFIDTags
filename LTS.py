@@ -9,6 +9,7 @@ from sys import exit
 class MyDB(object):
     _conn = None
     _cur = None
+    _last_id = None
 
     def __init__(self):
         self._conn = MySQLdb.connect(host=config.host,
@@ -16,12 +17,20 @@ class MyDB(object):
                            passwd=config.passwd,
                            db=config.db)
         self._cur = self._conn.cursor()
+        self._last_id = self._cur.lastrowid
+
 
     def query(self, query, params=None):
         if params != None:
-            return self._cur.execute(query, params)
+            final = self._cur.execute(query, params)
+            self._last_id = self._cur.lastrowid
+            return final
         else:
-            return self._cur.execute(query)
+            final = self._cur.execute(query)
+            self._last_id = self._cur.lastrowid
+            return final
+
+
     def __del__(self):
         self._conn.close()
 
@@ -34,14 +43,14 @@ def wipearray():
     DB.query("DROP TABLE IF EXISTS learners")
 
     DB.query('''CREATE TABLE learners(
-                `learner_id` INT NOT NULL AUTO_INCREMENT,
+                `learner_id` INT AUTO_INCREMENT,
                 `first_name` VARCHAR(45) NOT NULL,
                 `last_name` VARCHAR(45) NOT NULL,
-                `year` INT NOT NULL,
-                `notes` VARCHAR(255) NULL,
-                `location` INT(3) NOT NULL,
-                `check_in_time` INT(11) NOT NULL,
-                `rfid` VARCHAR(36) NOT NULL,
+                `year` INT(3) NOT NULL DEFAULT 0,
+                `notes` VARCHAR(255),
+                `location` INT(3) NOT NULL DEFAULT 0,
+                `check_in_time` INT(11) NOT NULL DEFAULT 0,
+                `rfid` VARCHAR(36) NOT NULL DEFAULT 0,
                 PRIMARY KEY (`learner_id`))''')
 
 
@@ -57,12 +66,18 @@ def createLearner(first_name,last_name):
     """
     DB = MyDB()
 
-    DB.query("INSERT INTO learners (first_name,last_name,year,location,check_in_time,rfid) VALUES (%s, %s, 0, 0, 0, 0)",
-             (first_name,last_name))
+    DB.query("""INSERT INTO learners
+            SET first_name = %s,
+            SET last_name = %s,
+            SET year = 0,
+            SET location = 0
+            SET check_in_time = 0
+            SET rfid = 0)""",
+            params=(first_name,last_name))
 
-    id = DB.query("""SELECT LAST_INSERT_ID()""")
+    id = DB._last_id
 
-    return id
+    return int(id)
 
 def learnerfromRFID(RFID):
     """ Creates a learner object
@@ -71,7 +86,7 @@ def learnerfromRFID(RFID):
     """
     DB = MyDB()
     try:
-        id = DB.query("SELECT id FROM learners WHERE rfID = :rfID", {'rfID': RFID})
+        id = DB.query("SELECT learner_id FROM learners WHERE rfID = :rfID", {'rfID': RFID})
     except TypeError:
         raise ValueError('No learner with RFID:{}'.format(RFID))
     try:
@@ -99,8 +114,9 @@ class LTSBackend(object):
     @property
     def first_name(self):
         DB = MyDB()
+
         # TODO : Implement some form of checking before returning ID
-        return DB.query("SELECT first_name FROM learners WHERE id = %d", (self.ID))
+        return DB.query("SELECT first_name FROM learners WHERE learner_id = %d", (self.ID))
 
     @first_name.setter
     def first_name(self,newName):
@@ -108,18 +124,22 @@ class LTSBackend(object):
 
         DB.query("""UPDATE learners
                   SET first_name = %s
-                  WHERE id= %d""",
+                  WHERE learner_id= %d""",
                  (newName,self.ID))
 
         # The reason I do the select is to make sure that it actually inserted it into the database
         # I should probably remove these to save speed.
-        self._first_name = DB.query("SELECT first_name FROM learners WHERE id = %d", (self.ID))
+        self._first_name = DB.query("SELECT first_name FROM learners WHERE learner_id = %d", (self.ID))
 
     @property
     def last_name(self):
         DB = MyDB()
+        print "-----"
+        print self.ID
+        print type(self.ID)
+        print "-----"
 
-        return DB.query("SELECT last_name FROM learners WHERE id = %d", (self.ID))
+        return DB.query("SELECT last_name FROM learners WHERE learner_id = %d", (self.ID))
 
     @last_name.setter
     def last_name(self,newName):
@@ -127,15 +147,15 @@ class LTSBackend(object):
 
         DB.query("""UPDATE learners
                 SET last_name = %s
-                WHERE id = %d""",
+                WHERE learner_id = %d""",
                  (newName,self.ID))
-        self._last_name = DB.query("SELECT last_name FROM learners WHERE id = %d", (self.ID))
+        self._last_name = DB.query("SELECT last_name FROM learners WHERE learner_id = %d", (self.ID))
 
     @property
     def Notes(self):
         DB = MyDB()
 
-        return DB.query("SELECT notes FROM learners WHERE id = %d", (self.ID))
+        return DB.query("SELECT notes FROM learners WHERE learner_id = %d", (self.ID))
 
     @Notes.setter
     def Notes(self,newNotes):
@@ -143,16 +163,16 @@ class LTSBackend(object):
 
         DB.query("""UPDATE learners
                   SET notes = %s
-                  WHERE id= %d""",
+                  WHERE learner_id= %d""",
                  (newNotes, self.ID))
 
-        self._Notes = DB.query("SELECT notes FROM learners WHERE id = %d", (self.ID))
+        self._Notes = DB.query("SELECT notes FROM learners WHERE learner_id = %d", (self.ID))
 
     @property
     def Location(self):
         DB = MyDB()
 
-        return DB.query('SELECT location FROM learners WHERE id= %d', (self.ID))
+        return DB.query('SELECT location FROM learners WHERE learner_id= %d', (self.ID))
 
     @Location.setter
     def Location(self, location):
@@ -163,20 +183,20 @@ class LTSBackend(object):
         unix_time = time.time()
         DB.query("""UPDATE learners
                   SET check_in_time = %d
-                  WHERE id= %d""",
+                  WHERE learner_id= %d""",
                  (unix_time, self.ID))
         DB.query("""UPDATE learners
                   SET location = %d
-                  WHERE id= %d""",
+                  WHERE learner_id= %d""",
                  (location, self.ID))
 
-        self._Location = DB.query('SELECT location FROM learners WHERE id= %d', (self.ID))
+        self._Location = DB.query('SELECT location FROM learners WHERE learner_id= %d', (self.ID))
 
     @property
     def RFID(self):
         DB = MyDB()
 
-        return DB.query('SELECT rfid FROM learners WHERE id= %d', (self.ID))
+        return DB.query('SELECT rfid FROM learners WHERE learner_id= %d', (self.ID))
 
     @RFID.setter
     def RFID(self,newRFID):
@@ -184,7 +204,7 @@ class LTSBackend(object):
 
         DB.query("""UPDATE learners
                 SET rfID = %s
-                WHERE id= %d""",
+                WHERE learner_id= %d""",
                  (newRFID,self.ID))
 
-        return DB.query('SELECT rfid FROM learners WHERE id= %d', (self.ID))
+        return DB.query('SELECT rfid FROM learners WHERE learner_id= %d', (self.ID))
