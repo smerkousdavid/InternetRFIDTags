@@ -4,10 +4,10 @@
 #include <EEPROM.h>
 
 //Values most likely needed to be edited//
-#define SSID        "David"       //Your router SSID
-#define PASSWORD    "Alex12345"    //Your router Password
-#define serverIP    "192.168.0.17" //Your modules IP
-#define gateWay     "192.168.0.1"  //Gateway
+#define SSID        "SSID"       //Your router SSID
+#define PASSWORD    "PASSWORD"    //Your router Password
+#define serverIP    "192.168.1.17" //Your modules IP
+#define gateWay     "192.168.1.1"  //Gateway
 #define PORT        8080          //The port that your using(Make sure your router is port forwarded for your phone)
 #define debug       true          //Put false if youre arduino is not connected to your computer
 #define COMBaud     115200        //Put the computer baudrate(make sure in Serial monitor it's also 115200)
