@@ -1,8 +1,5 @@
-import sqlite3
 import MySQLdb
 import time
-import string
-import random
 import config
 
 from sys import exit
@@ -106,9 +103,10 @@ class LTSBackend(object):
         self.ID = ID
         self._first_name = None
         self._last_name = None
+        self._Notes = None
         self._Location = None
         self._RFID = None
-        self._Notes = None
+
 
     @property
     def first_name(self):
@@ -152,18 +150,19 @@ class LTSBackend(object):
     def Notes(self):
         DB = MyDB()
 
-        return DB.query("SELECT notes FROM learners WHERE learner_id = %s", (self.ID))
+        return DB.query("SELECT notes FROM learners WHERE learner_id = %(ID)s",{'ID' : 1})[0]
 
     @Notes.setter
-    def Notes(self,newNotes):
+    def Notes(self,new_notes):
         DB = MyDB()
 
         DB.query("""UPDATE learners
-                  SET notes = %s
-                  WHERE learner_id= %d""",
-                 (newNotes, self.ID))
+                    SET notes=%(new_notes)s
+                    WHERE learner_id=%(id)s""",
+                    params={'new_notes' : new_notes,
+                            'id'       : self.ID})
 
-        self._Notes = DB.query("SELECT notes FROM learners WHERE learner_id = %d", (self.ID))
+        self._Notes = DB.query("SELECT notes FROM learners WHERE learner_id = %(ID)s",{'ID' : 1})[0]
 
     @property
     def Location(self):
