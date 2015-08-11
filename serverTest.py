@@ -29,7 +29,7 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
         except Exception as e:
             print "SOMETHING BROKE"
             print e.message
-            self.request.sendall("b")
+            self.request.sendall("bb")
 
 if __name__ == "__main__":
     print 'STARTING'
