@@ -114,7 +114,7 @@ void loop() //Run forever
   status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, &key, &(mfrc522.uid));
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("PCD_Authenticate() failed: ")); //Remember the FFFFF... You need to identify the card before accessing
-    Serial.println(mfrc522.GetStatusCodeName(status));
+    //Serial.println(mfrc522.GetStatusCodeName(status)); error
     Error(); //Error light
     return;
   }
@@ -124,7 +124,7 @@ void loop() //Run forever
   status = mfrc522.MIFARE_Read(blockAddr, buffer, &size); //Read the addr with a buffer 2 times (18bytes)
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("MIFARE_Read() failed: "));
-    Serial.println(mfrc522.GetStatusCodeName(status));
+    //Serial.println(mfrc522.GetStatusCodeName(status)); error
     Error();
   }
       // Halt PICC 
